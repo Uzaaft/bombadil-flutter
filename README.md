@@ -39,7 +39,8 @@ bombadil external test --specification spec/generic.spec.ts -- \
 ```
 
 Other options: `--name`, `--stall-timeout-ms` (sent in `hello`, 60000 by
-default, because a JIT app takes a few seconds to start), and engine
+default, because a JIT app takes a few seconds to start), `--frame-clock`,
+`--disable-animations` and `--quiet-ms` (see below), and engine
 switches after `--`. The app runs in debug (JIT) mode from
 `kernel_blob.bin`, with the software renderer, at a fixed size and a
 device pixel ratio of 1.
@@ -50,10 +51,52 @@ the wrong widgets. `--fonts <dir>` runs the app from a symlinked copy of its
 assets whose `FontManifest.json` adds one font family per subdirectory of
 `<dir>`. The flake's directory has Roboto and DejaVu Sans.
 
-**Settling.** The driver reports a state once the app has asked for no
-frame and changed no semantics for 300ms (at least 300ms after an action),
-or after 5s, with `settled: false`. Text cursors don't blink (the
-deterministic-cursor accessibility feature), so they don't keep apps busy.
+**Settling.** The driver runs the engine's platform and UI task runners
+itself, so it can tell exactly when the app is done. It reports a state as
+soon as the app is idle: no frame requested, no UI task running, and no UI
+or platform task due. Semantics updates reach the driver as platform tasks
+that the producing frame posts, so an idle app's tree is final. If the app
+isn't idle within 5s (it animates forever, like a spinner), the state says
+`settled: false`. Text cursors don't blink (the deterministic-cursor
+accessibility feature), so they don't keep apps busy.
+
+The driver can't see work off the UI thread: network and file I/O, Dart
+`Timer`s and `Future.delayed`, image decoding. If an app updates the screen
+when such work finishes, without animating while it waits, the driver
+reports the screen as it was before the update, and the update shows up in
+a later state. `--quiet-ms <ms>` waits at least that long after each action
+(0 by default). compass_app's network images, which fail here, are an
+example: their error placeholders appear a step or two later.
+
+**Frame clock.** With `--frame-clock virtual` (the default), the driver
+runs requested frames immediately, each 16.67ms after the previous one in
+frame time. Animations therefore finish in milliseconds of wall time
+instead of their real duration. Frame time never gets ahead of real time
+(the engine would wait for it). It starts at the monotonic clock's origin
+(boot), so its lead is the machine's uptime. After 120 frames in one step
+(2s of animation), frames are paced in real time while frame time stays
+virtual, so a spinner waiting on I/O doesn't use up the lead. Dart timers
+still run in real time. `--frame-clock real` runs frames at most every
+16.67ms at the current time, like a 60Hz display.
+
+`--disable-animations` turns on the platform's "disable animations"
+accessibility feature (`MediaQuery.disableAnimations`). Apps that honour it
+skip transitions, which is faster still. It also changes what the app does,
+so it is off by default.
+
+`BOMBADIL_FLUTTER_TIMING=1` logs a line per step to stderr: when the action
+was dispatched, how many frames ran, when the app last asked for a frame and
+last updated its semantics, and the total.
+
+compass_app, 45s `bombadil external test` runs, driver time per step:
+
+| Settling | mean | median | p90 | states/s |
+| --- | --- | --- | --- | --- |
+| 300ms quiet window (before) | 609ms | 671ms | 679ms | 1.6 |
+| exact, `--frame-clock real` | 319ms | 395ms | 400ms | 3.1 |
+| exact, real clock, `--disable-animations` | 42ms | 46ms | 50ms | 21.6 |
+| exact, virtual clock (default) | 30ms | 27ms | 58ms | 28.3 |
+| exact, virtual clock, `--disable-animations` | 17ms | 12ms | 43ms | 45.8 |
 
 ### State
 
