@@ -266,7 +266,7 @@ messages ("driver step" is from `apply` to `state`):
 | --- | --- | --- | --- |
 | Rust embedder (before) | 26.8 | 27ms | |
 | in-app, rasterizing every frame | 42.9 | 12ms | 46ms |
-| in-app (default) | 60.3 | 7ms | 30ms |
+| in-app (default) | 60.1 | 7ms | 30ms |
 
 Per step, by default (`BOMBADIL_FLUTTER_TIMING=1`, medians): the action
 takes 0.3ms, settling 5.9ms (24 frames, all of it waiting for frames),
