@@ -50,7 +50,13 @@ BOMBADIL_FLUTTER_PROTOCOL_FD=3 "$engine/flutter_tester" \
   build/flutter_assets/kernel_blob.bin 3>&1 1>&2
 ```
 
-`experiments/compass_app/driver.sh` is that command. Use the app's own
+`experiments/compass_app/driver.sh` is that command, plus fresh
+`XDG_DATA_HOME`, `XDG_CACHE_HOME` and `XDG_CONFIG_HOME` directories for
+each run. Plugins that are pure Dart, such as `path_provider_linux` and
+`shared_preferences_linux`, do work, on real files under those
+directories. Without fresh ones, runs see each other's preferences and
+caches, which breaks replays, and parallel runs race on the same files
+(compass_app's image cache did). Use the app's own
 `build/flutter_assets` for `--flutter-assets-dir` if the entrypoint lives
 in another package: its asset manifest lists the app's assets.
 
@@ -97,7 +103,8 @@ and layouts and taps go wrong. `runBombadil` loads one font family per
 subdirectory of `BOMBADIL_FLUTTER_FONTS` with `FontLoader` before the app
 starts. The flake's directory has Roboto and DejaVu Sans.
 
-**Plugins.** No plugin is implemented. Method calls that the platform
+**Plugins.** Dart plugins for Linux run as they are (see above), but
+`flutter_tester` has no native plugins. Method calls that the platform
 doesn't answer get a successful null reply (JSON and standard method
 codecs, and Pigeon host APIs), so plugin calls neither hang nor throw
 `MissingPluginException`. The driver keeps the route
